@@ -2,8 +2,8 @@
 
 A modern, responsive frontend clone of the Zerodha Kite web application, built with Next.js and Tailwind CSS.
 
-![Screenshot of the app](./Screenshot-from-2025-06-10-02-21-59.png)
-_Replace this with a real screenshot of your app._
+![Screenshot of the app](./Screenshot%20from%202025-06-10%2002-21-59.png)
+_A screenshot of the application's main interface._
 
 ---
 
