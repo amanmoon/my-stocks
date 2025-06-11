@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zerodha Kite Web Clone 🪁
+
+A modern, responsive frontend clone of the Zerodha Kite web application, built with Next.js and Tailwind CSS.
+
+![Screenshot of the app](./Screenshot%20from%202025-06-10%2002-21-59.png)
+_A screenshot of the application's main interface._
+
+---
+
+## About The Project
+
+This project is a frontend clone of Zerodha Kite, a popular online trading platform. The goal was to replicate the user interface and user experience of the Kite web application using a modern tech stack. This project demonstrates proficiency in building complex and responsive user interfaces with **Next.js** for server-side rendering and **Tailwind CSS** for utility-first styling.
+---
 
 ## Getting Started
 
-First, run the development server:
+To get a local copy up and running, follow these simple steps.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Prerequisites
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Make sure you have Node.js and npm (or yarn) installed on your machine.
+* npm
+    ```sh
+    npm install npm@latest -g
+    ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Installation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1.  **Clone the repo**
+    ```sh
+    git clone [https://github.com/your_username/your_repository.git](https://github.com/your_username/your_repository.git)
+    ```
+2.  **Navigate to the project directory**
+    ```sh
+    cd your_repository
+    ```
+3.  **Install NPM packages**
+    ```sh
+    npm install
+    ```
+4.  **Run the development server**
+    ```sh
+    npm run dev
+    ```
+    Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Usage
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This application is a frontend-only clone and does not connect to any live trading APIs. It serves as a visual and interactive demonstration of the Zerodha Kite platform.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can explore the different UI components, such as:
+* The main dashboard with market watchlists
+* The portfolio page
+* Order placement windows (UI only)
 
-## Deploy on Vercel
+Here's another look at the application in action:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+![Another screenshot of the app](</path/to/your/screenshot2.png>)
+_Feel free to add more screenshots to showcase different parts of your app._
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
