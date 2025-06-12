@@ -1,27 +1,40 @@
 'use client';
 
+// Import necessary React hooks and components.
 import React, { useState, useEffect, useRef } from 'react';
+
+// Import icons from the 'react-icons' library for UI elements.
 import { FaRegBookmark, FaBell, FaSearch, FaCheckCircle, FaPlus, FaMinus } from 'react-icons/fa';
-import { GiSettingsKnobs } from "react-icons/gi";
 import { FiBriefcase } from 'react-icons/fi';
 import { HiOutlineNewspaper } from 'react-icons/hi2';
-import { TbBriefcaseOff } from "react-icons/tb";
+import { IoIosSettings } from "react-icons/io";
+import { TbBriefcaseOff, TbNewsOff } from "react-icons/tb";
 import { MdSearchOff } from "react-icons/md";
-import { TbNewsOff } from "react-icons/tb";
 
+// Import charting components from 'recharts' library for stock price charts.
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush, CartesianGrid, Cell } from 'recharts';
+
+// Import the Drawer component from 'vaul' for stock information bottom panel.
 import { Drawer } from 'vaul';
 
 //================================================================
 // 1. TYPE DEFINITIONS
 //================================================================
+// This section defines all the custom TypeScript types used throughout the application for strong typing.
 
-type CurrentView = 'home' | 'watchlist' | 'portfolio' | 'news';
+/** Defines the possible views for the main navigation. */
+type CurrentView = 'watchlist' | 'portfolio' | 'news';
+
+/** Defines the possible transaction types. */
 type ActionType = 'BUY' | 'SELL';
 
+/** A union type representing any stock that can be selected to open the detail sheet. */
 type SelectableStock = Stock | HoldingStock | PositionStock;
+
+/** Defines the structure for watchlists, mapping a watchlist name to an array of stock IDs. */
 type WState = Record<string, string[]>;
 
+/** Interface for a general stock, typically shown in the main watchlist. */
 interface Stock {
   id: string;
   name: string;
@@ -30,6 +43,7 @@ interface Stock {
   previousDayPrice: number;
 }
 
+/** Interface for a stock held in the user's portfolio (long-term investment). */
 interface HoldingStock {
   id: string;
   name: string;
@@ -39,6 +53,7 @@ interface HoldingStock {
   currentMarketPrice: number;
 }
 
+/** Interface for a stock in an intraday position. */
 interface PositionStock {
   id: string;
   name: string;
@@ -49,6 +64,7 @@ interface PositionStock {
   type: 'BUY' | 'SELL';
 }
 
+/** Interface for a news article. */
 interface NewsArticle {
   id: string;
   imageUrl: string;
@@ -58,6 +74,7 @@ interface NewsArticle {
   category: string;
 }
 
+/** Interface for a user-created price alert. */
 interface PriceAlert {
   id: number;
   stockId: string;
@@ -67,11 +84,15 @@ interface PriceAlert {
   triggered: boolean;
 }
 
+// Props definitions for React components below.
+
+/** Props for the StockChart component. */
 interface StockChartProps {
   chartType: 'Line' | 'Candle';
   activeTimeline: keyof typeof CHART_DATA_SETS;
 }
 
+/** Props for the CustomNotification component. */
 interface CustomNotificationProps {
   visible: boolean;
   message: string;
@@ -79,12 +100,14 @@ interface CustomNotificationProps {
   type: string;
 }
 
+/** Props for the EmptyState component, displays component when the list is empty. */
 interface EmptyStateProps {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
 }
 
+/** Props for the ConfirmationDialog component, used for buy/sell actions. */
 interface ConfirmationDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,6 +117,7 @@ interface ConfirmationDialogProps {
   ownedQuantity?: number;
 }
 
+/** Props for the AlertCreationDialog component. */
 interface AlertCreationDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -101,6 +125,7 @@ interface AlertCreationDialogProps {
   onSetAlert: (price: number) => void;
 }
 
+/** Props for the StockDetailSheet component, which shows detailed stock info. */
 interface StockDetailSheetProps {
   stock: SelectableStock | null;
   open: boolean;
@@ -110,6 +135,7 @@ interface StockDetailSheetProps {
   onSell: (stock: SelectableStock, quantity: number, assetType: 'holding' | 'position') => void;
 }
 
+/** Props for the StockItem component, representing a single row in the watchlist. */
 interface StockItemProps {
   stock: Stock;
   onStockClick: (stock: Stock) => void;
@@ -119,20 +145,24 @@ interface StockItemProps {
   onRemove: () => void;
 }
 
+/** Props for the HoldingStockItem component. */
 interface HoldingStockItemProps {
   stock: HoldingStock;
   onStockClick: (stock: HoldingStock) => void;
 }
 
+/** Props for the PositionStockItem component. */
 interface PositionStockItemProps {
   stock: PositionStock;
   onStockClick: (stock: PositionStock) => void;
 }
 
+/** Props for the NewsItem component. */
 interface NewsItemProps {
   article: NewsArticle;
 }
 
+/** Props for the SummaryCard component in the portfolio. */
 interface SummaryCardProps {
   investedAmount: number;
   currentAmount: number;
@@ -141,11 +171,13 @@ interface SummaryCardProps {
   showPercentagePL: boolean;
 }
 
+/** Props for the BottomNavBar component. */
 interface BottomNavBarProps {
   onNavClick: (view: CurrentView) => void;
   currentView: CurrentView;
 }
 
+/** Props for the WatchlistPage component. */
 interface WatchlistPageProps {
   onStockSelect: (stock: SelectableStock) => void;
   allStocks: Stock[];
@@ -154,25 +186,36 @@ interface WatchlistPageProps {
   onRemoveStock: (stockId: string, watchListName: string) => void;
 }
 
+/** Props for the PortfolioPage component. */
 interface PortfolioPageProps {
   onStockSelect: (stock: SelectableStock) => void;
   holdings: HoldingStock[];
   positions: PositionStock[];
 }
 
+
 //================================================================
-// 2. DUMMY DATA & HELPERS
+// 2. DUMMY DATA & HAPTICS HELPER
 //================================================================
 
-// --- Chart Data Generation ---
+/**
+ * Generates sample Open-High-Low-Close (OHLC) data for charts.
+ * @param numPoints - The number of data points to generate.
+ * @param period - The time period between points ('hour' or 'day').
+ * @param basePrice - The starting price for the data generation.
+ * @param volatility - A factor determining the size of price fluctuations.
+ * @returns An array of chart data.
+ */
 const generateOHLCData = (numPoints: number, period: 'hour' | 'day', basePrice: number, volatility: number) => {
   const data = [];
   let lastClose = basePrice;
 
   for (let i = 0; i < numPoints; i++) {
     const date = new Date();
-    if (period === 'hour') date.setHours(new Date().getHours() - (numPoints - 1 - i));
-    if (period === 'day') date.setDate(new Date().getDate() - (numPoints - 1 - i));
+    if (period === 'hour')
+      date.setHours(new Date().getHours() - (numPoints - 1 - i));
+    if (period === 'day')
+      date.setDate(new Date().getDate() - (numPoints - 1 - i));
 
     const open = lastClose;
     const close = open + (Math.random() - 0.5) * volatility;
@@ -194,17 +237,18 @@ const generateOHLCData = (numPoints: number, period: 'hour' | 'day', basePrice: 
   return data;
 };
 
-// --- Static Data ---
+/** A collection of pre-generated chart data sets for different timelines. */
 const CHART_DATA_SETS = {
   '6H': generateOHLCData(6, 'hour', 175, 1.5),
   '1D': generateOHLCData(24, 'hour', 178, 2),
   '5D': generateOHLCData(5, 'day', 180, 5),
   '1M': generateOHLCData(30, 'day', 185, 8),
-  '6M': generateOHLCData(180, 'day', 200, 15),
+  '6M': generateOHLCData(180, 'day', 300, 15),
   '1Y': generateOHLCData(365, 'day', 220, 25),
   'All': generateOHLCData(500, 'day', 150, 30),
 };
 
+/** Initial list of all available stocks for searching and adding to watchlists. */
 const DUMMY_STOCKS: Stock[] = [
   { id: '1', name: 'AAPL', exchange: 'NASDAQ', currentPrice: 175.50, previousDayPrice: 174.00 },
   { id: '2', name: 'MSFT', exchange: 'NASDAQ', currentPrice: 420.10, previousDayPrice: 425.00 },
@@ -227,19 +271,23 @@ const DUMMY_STOCKS: Stock[] = [
   { id: '20', name: 'ICICIBANK', exchange: 'NSE', currentPrice: 1120.80, previousDayPrice: 1125.00 },
 ];
 
+/** Initial data for the user's holdings. */
 const DUMMY_HOLDINGS: HoldingStock[] = [
   { id: 'h1', name: 'RELIANCE', exchange: 'NSE', quantity: 10, avgBuyPrice: 2800.00, currentMarketPrice: 2900.50 },
   { id: 'h2', name: 'TCS', exchange: 'NSE', quantity: 5, avgBuyPrice: 3850.00, currentMarketPrice: 3800.00 },
   { id: 'h3', name: 'AAPL', exchange: 'NASDAQ', quantity: 2, avgBuyPrice: 170.00, currentMarketPrice: 175.50 },
 ];
 
+/** Initial data for the user's intraday positions. */
 const DUMMY_POSITIONS: PositionStock[] = [
   { id: 'p1', name: 'INFY', exchange: 'NSE', quantity: 20, entryPrice: 1500.00, currentMarketPrice: 1450.75, type: 'BUY' },
   { id: 'p2', name: 'HDFCBANK', exchange: 'NSE', quantity: 15, entryPrice: 1470.00, currentMarketPrice: 1530.50, type: 'SELL' },
 ];
 
+/** A list of available categories for the news page. */
 const DUMMY_NEWS_CATEGORIES: string[] = ['All', 'New', 'Discover', 'Following', 'Hot', 'Breaking', 'Market Analysis', 'Tech'];
 
+/** A list of dummy news articles. */
 const DUMMY_NEWS_ARTICLES: NewsArticle[] = [
   { id: 'n1', imageUrl: 'https://images.unsplash.com/photo-1556740714-a8395b3bf30f?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', title: 'AAPL hits record high after iPhone sales surge', description: 'Apple shares surged today following unexpectedly strong iPhone sales figures.', stockSymbol: 'AAPL', category: 'Hot' },
   { id: 'n2', imageUrl: 'https://images.unsplash.com/photo-1501167786227-4cba60f6d58f?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', title: 'RBI rate hike expected next quarter', description: 'Analysts predict a 25 basis point hike by the Reserve Bank of India.', stockSymbol: 'NIFTY', category: 'Market Analysis' },
@@ -252,17 +300,44 @@ const DUMMY_NEWS_ARTICLES: NewsArticle[] = [
   { id: 'n9', imageUrl: 'https://images.unsplash.com/photo-1682068548081-50aa8b92c8c1?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', title: 'NVIDIA Stock Jumps on Strong Earnings and AI Chip Demand', description: 'NVIDIA surpassed analyst expectations with a stellar quarterly report, citing unprecedented demand for its AI hardware.', stockSymbol: 'NVDA', category: 'Hot' },
 ];
 
+/**
+ * Triggers haptic feedback with different patterns if the device supports it.
+ * @param intensity The desired feedback pattern ('light', 'medium', 'heavy', etc.).
+ */
+const triggerHapticFeedback = (intensity = 'light') => {
+  // First, check if the browser supports the Vibration API.
+  if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
+    let pattern;
+    // Select a vibration pattern based on the desired intensity.
+    switch (intensity) {
+      case 'light': pattern = 20; break;
+      case 'medium': pattern = 40; break;
+      case 'heavy': pattern = [100, 50, 100]; break;
+      case 'success': pattern = [25, 50, 25, 50, 25]; break;
+      case 'warning': pattern = [50, 75, 100]; break;
+      case 'error': pattern = [200, 75, 150]; break;
+      default: pattern = 20; break;
+    }
+    // Trigger the vibration.
+    navigator.vibrate(pattern);
+  }
+};
+
 //================================================================
 // 3. REUSABLE & CHILD COMPONENTS
 //================================================================
 
-// --- Charting Components ---
-
+/**
+ * A component to display stock price charts using the Recharts library.
+ * It can render either a Line or a Candlestick (Bar) chart.
+ */
 const StockChart: React.FC<StockChartProps> = ({ chartType, activeTimeline }) => {
+  // Get the appropriate data set based on the active timeline.
   const data = CHART_DATA_SETS[activeTimeline];
-
+  // Check if the timeline is hourly to format the X-axis labels correctly.
   const isHourly = activeTimeline === '6H' || activeTimeline === '1D';
 
+  /** Formats the date string for the X-axis based on the timeline. */
   const formatXAxis = (isoString: string) => {
     const date = new Date(isoString);
     if (isHourly) {
@@ -276,91 +351,28 @@ const StockChart: React.FC<StockChartProps> = ({ chartType, activeTimeline }) =>
     <div style={{ width: '100%', height: 'clamp(250px, 35vh, 400px)' }}>
       <ResponsiveContainer width="100%" height="100%">
         {chartType === 'Line' ? (
+          // Renders a Line Chart if chartType is 'Line'.
           <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" opacity={0.6} />
-            <XAxis
-              dataKey="date"
-              fontSize={12}
-              tickLine={false}
-              axisLine={false}
-              stroke="#5c5e62"
-              tickFormatter={formatXAxis}
-            />
-            <YAxis
-              dataKey="ohlc.close"
-              domain={['dataMin - 5', 'dataMax + 5']}
-              fontSize={12}
-              tickLine={false}
-              axisLine={false}
-              stroke="#5c5e62"
-              tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                fontSize: '14px',
-                color: '#5c5e62'
-              }}
-              labelStyle={{ color: '#5d93e3', fontWeight: 'bold' }}
-              cursor={{ stroke: '#5d93e3', strokeDasharray: '3 3' }}
-            />
+            <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} stroke="#5c5e62" tickFormatter={formatXAxis} />
+            <YAxis dataKey="ohlc.close" domain={['dataMin - 5', 'dataMax + 5']} fontSize={12} tickLine={false} axisLine={false} stroke="#5c5e62" tickFormatter={(value) => `$${Number(value).toFixed(0)}`} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', color: '#5c5e62' }} labelStyle={{ color: '#5d93e3', fontWeight: 'bold' }} cursor={{ stroke: '#5d93e3', strokeDasharray: '3 3' }} />
             <Line type="monotone" dataKey="ohlc.close" name="Price" stroke="#5d93e3" strokeWidth={2} dot={false} />
-            <Brush
-              dataKey="date"
-              height={20}
-              stroke="#5d93e3"
-              fill="rgba(93, 147, 227, 0.1)"
-              travellerWidth={10}
-              tickFormatter={formatXAxis}
-            >
-            </Brush>
+            <Brush dataKey="date" height={20} stroke="#5d93e3" fill="rgba(93, 147, 227, 0.1)" travellerWidth={10} tickFormatter={formatXAxis} />
           </LineChart>
         ) : (
+          // Renders a Bar Chart to simulate candlesticks if chartType is 'Candle'.
           <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" opacity={0.6} />
-            <XAxis
-              dataKey="date"
-              fontSize={12}
-              tickLine={false}
-              axisLine={false}
-              stroke="#5c5e62"
-              tickFormatter={formatXAxis}
-            />
-            <YAxis
-              domain={['dataMin - 2', 'dataMax + 2']}
-              fontSize={12}
-              tickLine={false}
-              axisLine={false}
-              stroke="#5c5e62"
-              tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                fontSize: '14px',
-                color: '#5c5e62'
-              }}
-              labelStyle={{ color: '#5d93e3', fontWeight: 'bold' }}
-              cursor={{ stroke: '#5d93e3', strokeDasharray: '3 3' }}
-            />
+            <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} stroke="#5c5e62" tickFormatter={formatXAxis} />
+            <YAxis domain={['dataMin - 2', 'dataMax + 2']} fontSize={12} tickLine={false} axisLine={false} stroke="#5c5e62" tickFormatter={(value) => `$${Number(value).toFixed(0)}`} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', color: '#5c5e62' }} labelStyle={{ color: '#5d93e3', fontWeight: 'bold' }} cursor={{ stroke: '#5d93e3', strokeDasharray: '3 3' }} />
             <Bar dataKey="body" name="Price OHLC">
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.ohlc.close >= entry.ohlc.open ? '#22c55e' : '#ef4444'} />
               ))}
             </Bar>
-            <Brush
-              dataKey="date"
-              height={20}
-              stroke="#5d93e3"
-              fill="rgba(93, 147, 227, 0.1)"
-              travellerWidth={10}
-              tickFormatter={formatXAxis}
-            >
-            </Brush>
+            <Brush dataKey="date" height={20} stroke="#5d93e3" fill="rgba(93, 147, 227, 0.1)" travellerWidth={10} tickFormatter={formatXAxis} />
           </BarChart>
         )}
       </ResponsiveContainer>
@@ -368,18 +380,21 @@ const StockChart: React.FC<StockChartProps> = ({ chartType, activeTimeline }) =>
   );
 };
 
-// --- Notifications  ---
-
+/**
+ * A custom notification component that appears at the bottom of the screen.
+ * Also triggers a native browser notification for price alerts.
+ */
 const CustomNotification: React.FC<CustomNotificationProps> = ({ visible, message, description, type }) => {
   const isSuccess = type === 'success';
   const IconComponent = isSuccess ? FaCheckCircle : FaBell;
   const iconColorClass = isSuccess ? 'text-green-500' : 'text-blue-600';
 
+  // Effect to handle native browser notifications.
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return;
     }
-
+    // Only show native notification for alert types, not for simple success messages.
     if (visible && !isSuccess) {
       if (Notification.permission === 'granted') {
         new Notification(message, {
@@ -389,47 +404,56 @@ const CustomNotification: React.FC<CustomNotificationProps> = ({ visible, messag
       }
     }
   }, [isSuccess, visible, type, message, description]);
+
   return (
+    // The main container for the animated notification pop-up.
     <div
       className={`
-        fixed bottom-[25%] left-1/2 -translate-x-1/2
-        z-[100] transition-all duration-300 ease-in-out
+        fixed bottom-[25%] left-1/2 -translate-x-1/2 z-[100] 
+        transition-all duration-300 ease-in-out
         ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5 pointer-events-none'}
       `}
     >
-      <div className="bg-white rounded-xl shadow-lg p-4 w-80 flex items-center border border-gray-200">
+      <div className="flex w-80 items-center rounded-xl border border-gray-300 bg-white p-4 shadow-lg">
         <div className="flex-shrink-0">
           <IconComponent className={`h-6 w-6 ${iconColorClass}`} />
         </div>
         <div className="ml-4 flex-grow">
-          <p className="font-bold text-md text-[#5c5e62]">{message}</p>
-          <p className="text-sm text-gray-500 mt-0.5">{description}</p>
+          <p className="text-md font-bold text-[#5c5e62]">{message}</p>
+          <p className="mt-0.5 text-sm text-gray-500">{description}</p>
         </div>
       </div>
     </div>
   );
 };
 
+/**
+ * A component to display when a list (e.g., watchlist, portfolio) is empty.
+ */
 const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, subtitle }) => {
   return (
-    <div className="text-center py-24 px-5 text-[#5c5e62]">
-      <div className="flex justify-center mb-4">
+    <div className="px-5 py-24 text-center text-[#5c5e62]">
+      <div className="mb-4 flex justify-center">
         {icon}
       </div>
       <h3 className="text-xl font-bold">{title}</h3>
-      <p className="text-md mt-2">{subtitle}</p>
+      <p className="mt-2 text-md">{subtitle}</p>
     </div>
   );
 };
 
-// --- Dialogs & Sheets ---
-
+/**
+ * A full-screen dialog for confirming buy or sell transactions.
+ */
 const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose, onConfirm, stock, action, ownedQuantity = 0 }) => {
+  // State for the quantity input field.
   const [quantity, setQuantity] = useState('');
+  // State for displaying validation errors.
   const [error, setError] = useState('');
+  // State to determine if a buy action is for a 'holding' or 'position'.
   const [transactionType, setTransactionType] = useState<'holding' | 'position'>('holding');
 
-  // Effect to reset state when the dialog opens
+  // Effect to reset the dialog's state when it is opened.
   useEffect(() => {
     if (isOpen) {
       setQuantity('');
@@ -438,9 +462,9 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
     }
   }, [isOpen]);
 
+  // Effect for real-time validation of the quantity input.
   useEffect(() => {
     const numVal = parseInt(quantity, 10);
-    // Don't show an error for an empty input, the confirm button will be disabled anyway.
     if (!quantity) {
       setError('');
       return;
@@ -451,35 +475,53 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
     } else if (action === 'SELL' && numVal > ownedQuantity) {
       setError(`You can only sell up to ${ownedQuantity} shares.`);
     } else {
-      // If all checks pass, clear any existing error.
       setError('');
     }
-  }, [quantity, ownedQuantity, action]); // Dependencies for re-validation
+  }, [quantity, ownedQuantity, action]);
 
+  /** Handles changes to the quantity input field. */
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuantity(e.target.value);
   };
 
+  /** Handles the final confirmation click. */
   const handleConfirmClick = () => {
+    // Haptic: Heavy feedback for a major confirmation action.
+    triggerHapticFeedback('heavy');
     if (!error && quantity) {
       onConfirm(parseInt(quantity, 10), action === 'BUY' ? transactionType : undefined);
     }
   };
 
+  /** Handles closing the dialog. */
+  const handleClose = () => {
+    // Haptic: Light feedback for closing a dialog.
+    triggerHapticFeedback('light');
+    onClose();
+  };
+
+  /** Handles switching between 'holding' and 'position' transaction types. */
+  const handleTransactionTypeChange = (type: 'holding' | 'position') => {
+    // Haptic: Light feedback for changing selection.
+    triggerHapticFeedback('light');
+    setTransactionType(type);
+  };
 
   if (!isOpen || !stock) {
     return null;
   }
 
+  // Helper to get the current price from any stock type.
   const getCurrentPrice = (s: SelectableStock): number => 'currentMarketPrice' in s ? s.currentMarketPrice : s.currentPrice;
   const currentPrice = getCurrentPrice(stock);
   const numericQuantity = parseInt(quantity, 10) || 0;
   const totalPrice = currentPrice * numericQuantity;
+  // Determine if the confirm button should be disabled.
   const isButtonDisabled = !!error || !quantity;
-  const actionButtonClass = action === 'BUY'
-    ? 'bg-blue-600 hover:bg-blue-700'
-    : 'bg-red-500 hover:bg-red-600';
+  // Dynamically set button color based on action type.
+  const actionButtonClass = action === 'BUY' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-500 hover:bg-red-600';
 
+  /** A simple close icon component. */
   const CloseIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -487,13 +529,13 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
   );
 
   return (
-    <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Drawer.Root open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 bg-black/40 z-[60]" />
-        <Drawer.Content className="fixed inset-0 z-[70] flex flex-col p-6 font-sans bg-[#ebecee] text-[#5c5e62] outline-none focus:outline-none">
-          <div className="w-full h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/40" />
+        <Drawer.Content className="fixed inset-0 z-[70] flex flex-col bg-[#ebecee] p-6 text-[#5c5e62] outline-none">
+          <div className="flex h-full w-full flex-col" onClick={(e) => e.stopPropagation()}>
             <header className="flex-shrink-0">
-              <div className="flex justify-between items-start">
+              <div className="flex items-start justify-between">
                 <div>
                   <Drawer.Title className="text-4xl font-bold tracking-tight text-[#5c5e62]">
                     {action} {stock.name}
@@ -502,7 +544,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
                     {stock.exchange}
                   </Drawer.Description>
                 </div>
-                <button onClick={onClose} className="p-2 -mr-2 text-gray-500 hover:text-gray-900 transition-colors">
+                <button onClick={handleClose} className="-mr-2 p-2 text-gray-500 transition-colors hover:text-gray-900">
                   <CloseIcon />
                 </button>
               </div>
@@ -512,7 +554,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
               </div>
             </header>
 
-            <main className="flex-grow flex flex-col justify-center items-center py-10">
+            <main className="flex flex-grow flex-col items-center justify-center py-10">
               <label htmlFor="quantity" className="text-lg text-gray-600">
                 Quantity
               </label>
@@ -522,21 +564,21 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
                 value={quantity}
                 onChange={handleQuantityChange}
                 placeholder="0"
-                className="bg-transparent text-[#5c5e62] placeholder:text-gray-400 text-7xl font-bold text-center w-full focus:outline-none mt-2"
+                className="mt-2 w-full bg-transparent text-center text-7xl font-bold text-[#5c5e62] placeholder:text-gray-400 focus:outline-none"
                 autoFocus
               />
-              {error && <p className="text-red-500 text-sm mt-4 -translate-y-4">{error}</p>}
+              {error && <p className="-translate-y-4 mt-4 text-sm text-red-500">{error}</p>}
 
               {action === 'BUY' && (
-                <div className="mt-6 flex justify-center items-center p-1 bg-gray-300/50 rounded-lg">
+                <div className="mt-6 flex items-center justify-center rounded-lg bg-gray-300/50 p-1">
                   <button
-                    onClick={() => setTransactionType('holding')}
+                    onClick={() => handleTransactionTypeChange('holding')}
                     className={`px-6 py-2 text-sm font-bold rounded-md transition-colors ${transactionType === 'holding' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'}`}
                   >
                     Holding
                   </button>
                   <button
-                    onClick={() => setTransactionType('position')}
+                    onClick={() => handleTransactionTypeChange('position')}
                     className={`px-6 py-2 text-sm font-bold rounded-md transition-colors ${transactionType === 'position' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'}`}
                   >
                     Position
@@ -546,16 +588,16 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
             </main>
 
             <footer className="flex-shrink-0 space-y-4">
-              <div className="flex justify-between items-center text-lg">
+              <div className="flex items-center justify-between text-lg">
                 <span className="text-gray-600">Total Estimated Price</span>
-                <span className="font-bold text-2xl text-[#5c5e62]">
+                <span className="text-2xl font-bold text-[#5c5e62]">
                   ${totalPrice.toFixed(2)}
                 </span>
               </div>
               <button
                 onClick={handleConfirmClick}
                 disabled={isButtonDisabled}
-                className={`w-full text-white font-bold text-lg p-4 rounded-lg transition-colors ${actionButtonClass} disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed`}
+                className={`w-full rounded-lg p-4 text-lg font-bold text-white transition-colors ${actionButtonClass} disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500`}
               >
                 Confirm {action}
               </button>
@@ -567,57 +609,65 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, onClose
   );
 };
 
-
-
+/**
+ * A full-screen dialog for creating a new price alert.
+ */
 const AlertCreationDialog: React.FC<AlertCreationDialogProps> = ({ isOpen, onClose, stock, onSetAlert }) => {
+  // State for the target price input.
   const [price, setPrice] = useState('');
 
+  // Reset the price input when the dialog opens.
   useEffect(() => {
     if (isOpen) {
       setPrice('');
     }
   }, [isOpen]);
 
+  /** Handles the final confirmation to set the alert. */
   const handleSetAlertClick = async () => {
+    // Haptic: Success feedback for setting an alert.
+    triggerHapticFeedback('success');
     const priceValue = parseFloat(price);
     if (isNaN(priceValue) || priceValue <= 0) {
       console.error("Invalid price entered for the alert.");
       return;
     }
 
+    // Request permission for native notifications if not already granted.
     if ("Notification" in window && Notification.permission === "default") {
-      console.log("Requesting notification permission...");
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        console.log("Notification permission granted.");
-      } else {
-        console.log("Notification permission was denied.");
-      }
+      await Notification.requestPermission();
     }
     onSetAlert(priceValue);
   };
 
+  /** Handles closing the dialog. */
+  const handleClose = () => {
+    // Haptic: Light feedback for closing a dialog.
+    triggerHapticFeedback('light');
+    onClose();
+  };
+
+  if (!stock) return null;
+
+  /** A simple close icon component. */
   const CloseIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" >
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 
-  if (!stock) return null;
-
   const getCurrentPrice = (s: SelectableStock): number => 'currentMarketPrice' in s ? s.currentMarketPrice : s.currentPrice;
   const currentPrice = getCurrentPrice(stock);
 
   return (
-    <Drawer.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Drawer.Root open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 bg-black/40 z-[60]" />
-        <Drawer.Content className="fixed inset-0 z-[70] flex flex-col p-6 font-sans bg-[#ebecee] text-[#5c5e62] outline-none focus:outline-none">
+        <Drawer.Content className="fixed inset-0 z-[70] flex flex-col p-6 bg-[#ebecee] text-[#5c5e62] outline-none">
           <div
             className="w-full h-full flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Section */}
             <header className="flex-shrink-0">
               <div className="flex justify-between items-start">
                 <div>
@@ -629,7 +679,7 @@ const AlertCreationDialog: React.FC<AlertCreationDialogProps> = ({ isOpen, onClo
                   </Drawer.Description>
                 </div>
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="p-2 -mr-2 text-gray-500 hover:text-gray-900 transition-colors"
                 >
                   <CloseIcon />
@@ -641,7 +691,6 @@ const AlertCreationDialog: React.FC<AlertCreationDialogProps> = ({ isOpen, onClo
               </div>
             </header>
 
-            {/* Main Input Section */}
             <main className="flex-grow flex flex-col justify-center items-center py-10">
               <label
                 htmlFor="alert-price"
@@ -660,7 +709,6 @@ const AlertCreationDialog: React.FC<AlertCreationDialogProps> = ({ isOpen, onClo
               />
             </main>
 
-            {/* Footer Button */}
             <footer className="flex-shrink-0">
               <button
                 onClick={handleSetAlertClick}
@@ -677,30 +725,35 @@ const AlertCreationDialog: React.FC<AlertCreationDialogProps> = ({ isOpen, onClo
   );
 };
 
+/**
+ * A bottom sheet component that displays detailed information about a selected stock.
+ */
 const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpenChange, onSetAlert, onBuy, onSell }) => {
+  // State for the active chart timeline (e.g., '1D', '1M').
   const [activeTimeline, setActiveTimeline] = useState<keyof typeof CHART_DATA_SETS>('1D');
+  // State for the chart type ('Line' or 'Candle').
   const [chartType, setChartType] = useState<'Line' | 'Candle'>('Line');
+  // State to control the visibility of the alert creation dialog.
   const [isAlertDialogOpen, setAlertDialogOpen] = useState(false);
+  // State to control the visibility of the transaction confirmation dialog.
   const [isConfirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  // State to determine the action type ('BUY' or 'SELL').
   const [actionType, setActionType] = useState<ActionType>('BUY');
 
   if (!stock) return null;
 
+  /** Calculates and returns profit/loss details for the given stock. */
   const getProfitLossDetails = (s: SelectableStock) => {
-    let change = 0;
-    let percentage = 0;
-    let label = 'Today';
-    let isTotalProfit = false;
-
+    let change = 0, percentage = 0, label = 'Today', isTotalProfit = false;
     const currentPrice = 'currentMarketPrice' in s ? s.currentMarketPrice : s.currentPrice;
 
-    if ('avgBuyPrice' in s) { // It's a HoldingStock
+    if ('avgBuyPrice' in s) { // It's a Holding
       label = 'Total P&L';
       isTotalProfit = true;
       const investedValue = s.avgBuyPrice * s.quantity;
       change = s.currentMarketPrice * s.quantity - investedValue;
       percentage = investedValue > 0 ? (change / investedValue) * 100 : 0;
-    } else if ('entryPrice' in s) { // It's a PositionStock
+    } else if ('entryPrice' in s) { // It's a Position
       label = 'Position P&L';
       isTotalProfit = true;
       const entryValue = s.entryPrice * s.quantity;
@@ -710,7 +763,7 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
         change = (s.currentMarketPrice - s.entryPrice) * s.quantity;
       }
       percentage = entryValue > 0 ? (Math.abs(change) / entryValue) * 100 : 0;
-    } else if ('previousDayPrice' in s) { // It's a generic Watchlist Stock
+    } else if ('previousDayPrice' in s) { // It's a generic Watchlist stock
       label = "Today P&L";
       change = currentPrice - s.previousDayPrice;
       percentage = s.previousDayPrice > 0 ? (change / s.previousDayPrice) * 100 : 0;
@@ -718,17 +771,43 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
 
     const colorClass = change >= 0 ? 'text-green-600' : 'text-red-600';
     const sign = change >= 0 ? '+' : '';
-
     return { change, percentage, colorClass, sign, label, isTotalProfit };
   };
 
   const { change, percentage, colorClass, sign, label, isTotalProfit } = getProfitLossDetails(stock);
-
   const timelines = Object.keys(CHART_DATA_SETS) as Array<keyof typeof CHART_DATA_SETS>;
-  const handleSetAlert = (price: number) => { onSetAlert(stock, price); setAlertDialogOpen(false); };
-  const handleActionClick = (type: ActionType) => { setActionType(type); setConfirmDialogOpen(true); };
+
+  /** Wrapper function to handle setting an alert and closing the dialog. */
+  const handleSetAlert = (price: number) => {
+    onSetAlert(stock, price);
+    setAlertDialogOpen(false);
+  };
+
+  /** Initiates a buy or sell action flow. */
+  const handleActionClick = (type: ActionType) => {
+    // Haptic: Medium feedback for initiating a transaction flow.
+    triggerHapticFeedback('medium');
+    setActionType(type);
+    setConfirmDialogOpen(true);
+  };
+
+  /** Handles changing the chart timeline. */
+  const handleTimelineChange = (time: keyof typeof CHART_DATA_SETS) => {
+    // Haptic: Light feedback for changing tabs/timeline.
+    triggerHapticFeedback('light');
+    setActiveTimeline(time);
+  };
+
+  /** Opens the alert creation dialog. */
+  const handleOpenAlert = () => {
+    // Haptic: Medium feedback for opening a new dialog.
+    triggerHapticFeedback('medium');
+    setAlertDialogOpen(true);
+  };
+
   const isOwned = stock && 'quantity' in stock;
 
+  /** Confirms the transaction from the confirmation dialog. */
   const handleConfirmAction = (quantity: number, transactionType?: 'holding' | 'position') => {
     if (actionType === 'BUY' && transactionType) {
       onBuy(stock, quantity, transactionType);
@@ -739,22 +818,18 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
     setConfirmDialogOpen(false);
   };
 
-  const getOwnedQuantity = () => {
-    if (isOwned) {
-      return (stock as HoldingStock | PositionStock).quantity;
-    }
-    return 0;
-  };
+  /** Gets the quantity of the owned stock. */
+  const getOwnedQuantity = () => (isOwned ? (stock as HoldingStock | PositionStock).quantity : 0);
 
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange}>
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
-        <Drawer.Content className="bg-[#ebecee] flex flex-col rounded-t-[2rem] h-[75%] fixed bottom-0 left-0 right-0 z-50 text-[#5c5e62] shadow-lg outline-none focus:outline-none">
+        <Drawer.Content className="bg-[#ebecee] flex flex-col rounded-t-[2rem] h-[75%] fixed bottom-0 left-0 right-0 z-50 text-[#5c5e62] shadow-lg outline-none">
           <div className="p-3 bg-white rounded-t-[2rem] flex-shrink-0">
             <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-gray-300" />
           </div>
-          <div className="flex flex-col px-5 pb-4 border-b border-gray-200 flex-shrink-0 bg-white">
+          <div className="flex flex-col px-5 pb-4 border-b border-gray-300 flex-shrink-0 bg-white">
             <Drawer.Title className="font-bold text-3xl text-[#5c5e62]">
               {stock.name}
             </Drawer.Title>
@@ -785,7 +860,7 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
             </div>
             <div className="flex justify-between items-center mb-4">
               <button
-                onClick={() => setAlertDialogOpen(true)}
+                onClick={handleOpenAlert}
                 className="flex items-center text-blue-600 font-semibold text-sm p-2 rounded-md hover:bg-blue-50 transition-colors"
               >
                 <FaBell className="mr-2" /> Set Alert
@@ -812,8 +887,8 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
               {timelines.map((time) => (
                 <button
                   key={time}
-                  onClick={() => setActiveTimeline(time)}
-                  className={`flex-1 py-1.5 rounded-md text-sm font-bold transition-all duration-200 relative
+                  onClick={() => handleTimelineChange(time)}
+                  className={`flex-1 py-1.5 rounded-md text-sm font-bold transition-all duration-300 relative
                     ${activeTimeline === time
                       ? 'text-[#5d93e3]'
                       : 'bg-transparent text-[#5c5e62]'
@@ -847,26 +922,39 @@ const StockDetailSheet: React.FC<StockDetailSheetProps> = ({ stock, open, onOpen
   );
 };
 
-
+/**
+ * A component representing a single stock item in a list.
+ */
 const StockItem: React.FC<StockItemProps> = ({ stock, onStockClick, isAdded, isEditActive, onAdd, onRemove }) => {
+  // Calculate profit/loss for display.
   const profit = stock.currentPrice - stock.previousDayPrice;
   const profitPercentage = (profit / stock.previousDayPrice) * 100;
   const profitColorClass = profit >= 0 ? 'text-green-600' : 'text-red-600';
   const profitSign = profit >= 0 ? '+' : '';
 
+  /** Handles the add button click. */
+  const handleAdd = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent the parent div's click event.
+    // Haptic: Light feedback for adding to watchlist.
+    triggerHapticFeedback('light');
+    onAdd();
+  };
+
+  /** Handles the remove button click. */
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Haptic: Warning feedback for a removal action.
+    triggerHapticFeedback('warning');
+    onRemove();
+  };
+
+  /** Renders either the add or remove button. */
   const renderActionButton = () => (
     <button
-      onClick={(e) => {
-        e.stopPropagation(); // Prevent opening the detail sheet
-        if (isAdded) {
-          onRemove();
-        } else {
-          onAdd();
-        }
-      }}
+      onClick={isAdded ? handleRemove : handleAdd}
       className={`p-3 rounded-full transition-colors ${isAdded
-        ? 'bg-red-100 text-red-600 hover:bg-red-200'
-        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+        ? 'bg-red-100 text-red-600 hover:bg-red-300'
+        : 'bg-blue-100 text-blue-600 hover:bg-blue-300'
         }`}
       aria-label={isAdded ? "Remove from watchlist" : "Add to watchlist"}
     >
@@ -876,7 +964,7 @@ const StockItem: React.FC<StockItemProps> = ({ stock, onStockClick, isAdded, isE
 
   return (
     <div
-      className="p-4 border-b border-gray-200 flex justify-between items-center last:border-b bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer"
+      className="p-4 border-b border-gray-300 flex justify-between items-center last:border-b-0 bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer"
       onClick={() => onStockClick(stock)}
     >
       <div>
@@ -885,8 +973,10 @@ const StockItem: React.FC<StockItemProps> = ({ stock, onStockClick, isAdded, isE
       </div>
       <div className="text-right">
         {isEditActive ? (
+          // In edit mode, show add/remove buttons.
           renderActionButton()
         ) : (
+          // In normal mode, show price and P&L.
           <>
             <span className="text-xl font-bold">${stock.currentPrice.toFixed(2)}</span>
             <span className={`${profitColorClass} text-sm block`}>{profitSign}{profit.toFixed(2)} ({profitSign}{profitPercentage.toFixed(2)}%)</span>
@@ -897,8 +987,11 @@ const StockItem: React.FC<StockItemProps> = ({ stock, onStockClick, isAdded, isE
   );
 };
 
-
+/**
+ * A component representing a single holding in the portfolio.
+ */
 const HoldingStockItem: React.FC<HoldingStockItemProps> = ({ stock, onStockClick }) => {
+  // Calculate P&L for the holding.
   const holdingValue = stock.quantity * stock.currentMarketPrice;
   const investedValue = stock.quantity * stock.avgBuyPrice;
   const profit = holdingValue - investedValue;
@@ -907,7 +1000,7 @@ const HoldingStockItem: React.FC<HoldingStockItemProps> = ({ stock, onStockClick
   const profitSign = profit >= 0 ? '+' : '';
 
   return (
-    <div className="p-4 border-b border-gray-200 flex justify-between items-center last:border-b bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer" onClick={() => onStockClick(stock)}>
+    <div className="p-4 border-b border-gray-300 flex justify-between items-center last:border-b-0 bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer" onClick={() => onStockClick(stock)}>
       <div>
         <span className="font-semibold text-lg">{stock.name}</span>
         <span className="text-sm block">{stock.exchange} | {stock.quantity} Qty</span>
@@ -920,36 +1013,32 @@ const HoldingStockItem: React.FC<HoldingStockItemProps> = ({ stock, onStockClick
   );
 };
 
-
+/**
+ * A component representing a single intraday position.
+ */
 const PositionStockItem: React.FC<PositionStockItemProps> = ({ stock, onStockClick }) => {
-  // 1. Calculate P&L for both BUY (long) and SELL (short) positions.
+  // Calculate P&L for the position, accounting for BUY vs SELL types.
   let positionPL;
   if (stock.type === 'SELL') {
-    // For short positions, profit is made when the price goes down.
     positionPL = (stock.entryPrice - stock.currentMarketPrice) * stock.quantity;
   } else {
-    // For long positions, profit is made when the price goes up.
     positionPL = (stock.currentMarketPrice - stock.entryPrice) * stock.quantity;
   }
 
-  // 2. Calculate the percentage P&L based on the initial investment value.
   const investedValue = stock.entryPrice * stock.quantity;
   const percentagePL = investedValue > 0 ? (positionPL / investedValue) * 100 : 0;
-
-  // 3. Determine display styles based on the final P&L.
   const profitColorClass = positionPL >= 0 ? 'text-green-600' : 'text-red-600';
   const profitSign = positionPL >= 0 ? '+' : '';
   const typeColorClass = stock.type === 'BUY' ? 'text-green-500' : 'text-red-500';
 
   return (
-    <div className="p-4 border-b border-gray-200 flex justify-between items-center last:border-b bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer" onClick={() => onStockClick(stock)}>
+    <div className="p-4 border-b border-gray-300 flex justify-between items-center last:border-b-0 bg-white hover:bg-gray-100 transition-colors duration-150 cursor-pointer" onClick={() => onStockClick(stock)}>
       <div>
         <span className="font-semibold text-lg">{stock.name}</span>
         <span className="text-gray-500 text-sm block">{stock.exchange} | {stock.quantity} Qty | <span className={typeColorClass}>{stock.type}</span></span>
       </div>
       <div className="text-right">
         <span className="text-xl font-bold">${stock.currentMarketPrice.toFixed(2)}</span>
-        {/* 4. Update the JSX to display both absolute and percentage P&L */}
         <span className={`${profitColorClass} text-sm block`}>
           {profitSign}{positionPL.toFixed(2)} ({profitSign}{percentagePL.toFixed(2)}%)
         </span>
@@ -958,27 +1047,23 @@ const PositionStockItem: React.FC<PositionStockItemProps> = ({ stock, onStockCli
   );
 };
 
+/**
+ * A component for displaying a single news article card.
+ */
 const NewsItem: React.FC<NewsItemProps> = ({ article }) => {
   return (
-    <div className="flex flex-col bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 hover:shadow-md text-[#5c5e62]">
-      {/* Image at the top */}
+    <div className="flex flex-col bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-300 hover:shadow-md text-[#5c5e62]">
       <img
         src={article.imageUrl}
         alt={article.title}
         className="w-full h-auto aspect-video object-cover rounded-md mb-2"
       />
-
-      {/* Title below the image */}
       <h3 className="font-semibold text-lg mt-2 leading-tight mb-1">
         {article.title}
       </h3>
-
-      {/* Description after the title */}
       <p className="text-sm mt-0 line-clamp-2 mb-2">
         {article.description}
       </p>
-
-      {/* Stock Symbol at the bottom right */}
       <div className="flex justify-end">
         <div className="text-right text-[#5d93e3] font-medium text-sm">
           {article.stockSymbol}
@@ -988,8 +1073,9 @@ const NewsItem: React.FC<NewsItemProps> = ({ article }) => {
   );
 };
 
-// --- Summary & Navigation Components ---
-
+/**
+ * A card component that summarizes portfolio values (invested, current, P&L).
+ */
 const SummaryCard: React.FC<SummaryCardProps> = ({ investedAmount, currentAmount, profit, profitPercentage, showPercentagePL }) => {
   const profitColorClass = profit >= 0 ? 'text-green-600' : 'text-red-600';
   const profitSign = profit >= 0 ? '+' : '';
@@ -997,7 +1083,7 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ investedAmount, currentAmount
     <div className="relative bg-white p-5 mx-5 mt-4 rounded-sm shadow-sm z-10">
       <div className="flex justify-between text-lg"><span>Invested</span><span>Current</span></div>
       <div className="flex justify-between mt-1 text-2xl font-medium"><span>${investedAmount.toFixed(2)}</span><span>${currentAmount.toFixed(2)}</span></div>
-      <div className="border-t mt-4 pt-4 flex justify-between items-center">
+      <div className="border-t border-gray-300 mt-4 pt-4 flex justify-between items-center">
         <span className="font-semibold">P&L</span>
         <div className="flex items-center space-x-2">
           <span className={`text-xl font-bold ${profitColorClass}`}>{profitSign}{profit.toFixed(2)}</span>
@@ -1008,17 +1094,27 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ investedAmount, currentAmount
   );
 };
 
+/**
+ * The main bottom navigation bar for switching between views.
+ */
 function BottomNavBar({ onNavClick, currentView }: BottomNavBarProps) {
+  /** Handles navigation clicks and triggers haptic feedback. */
+  const handleNav = (view: CurrentView) => {
+    // Haptic: Light feedback for main navigation.
+    triggerHapticFeedback('light');
+    onNavClick(view);
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 w-full bg-white text-[#5c5e62] flex justify-around py-2 shadow-[0_-4px_8px_-1px_rgba(0,0,0,0.05)] z-50">
-      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'watchlist' ? 'text-blue-600' : ''}`} onClick={() => onNavClick('watchlist')}>
+      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'watchlist' ? 'text-blue-600' : ''}`} onClick={() => handleNav('watchlist')}>
         <FaRegBookmark className="text-xl mb-1 scale-125" /><span>Watchlist</span>
       </div>
-      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'portfolio' ? 'text-blue-600' : ''}`} onClick={() => onNavClick('portfolio')}>
-        <FiBriefcase className='text-xl mb-1 scale-135' /><span>Portfolio</span>
+      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'portfolio' ? 'text-blue-600' : ''}`} onClick={() => handleNav('portfolio')}>
+        <FiBriefcase className='text-xl mb-1 scale-150' /><span>Portfolio</span>
       </div>
-      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'news' ? 'text-blue-600' : ''}`} onClick={() => onNavClick('news')}>
-        <HiOutlineNewspaper className="text-xl mb-1 scale-145" /><span>News</span>
+      <div className={`flex flex-col items-center p-2 text-sm cursor-pointer hover:text-blue-600 ${currentView === 'news' ? 'text-blue-600' : ''}`} onClick={() => handleNav('news')}>
+        <HiOutlineNewspaper className="text-xl mb-1 scale-150" /><span>News</span>
       </div>
     </nav>
   );
@@ -1028,16 +1124,22 @@ function BottomNavBar({ onNavClick, currentView }: BottomNavBarProps) {
 // 4. PAGE COMPONENTS
 //================================================================
 
-
+/**
+ * The Watchlist page component, which displays lists of stocks and allows users to search.
+ */
 const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks, watchList, onAddStock, onRemoveStock }) => {
+  // State for the currently selected watchlist tab.
   const [selectedWatchlist, setSelectedWatchlist] = useState<string>(Object.keys(watchList)[0] || '');
+  // State for the search input query.
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // State to toggle edit mode for the watchlist.
   const [isEditMode, setIsEditMode] = useState(false);
 
   const watchListNames = Object.keys(watchList);
   const isSearchActive = searchQuery.length > 0;
   const showActionButtons = isEditMode || isSearchActive;
 
+  // Determine which stocks to display based on whether a search is active.
   const stocksToDisplay = isSearchActive
     ? allStocks.filter(stock =>
       stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1047,15 +1149,29 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
       allStocks.find(stock => stock.id === stockId)
     ).filter((stock): stock is Stock => stock !== undefined);
 
+  /** Handles changing the active watchlist tab. */
+  const handleWatchlistChange = (name: string) => {
+    // Haptic: Light feedback for switching tabs.
+    triggerHapticFeedback('light');
+    setSelectedWatchlist(name);
+  };
+
+  /** Toggles the edit mode on or off. */
+  const handleEditClick = () => {
+    // Haptic: Medium feedback for entering/exiting an edit mode.
+    triggerHapticFeedback('medium');
+    setIsEditMode(prev => !prev);
+    // Clear search when finishing edit mode.
+    if (isEditMode) setSearchQuery('');
+  };
+
+  /** Renders the action button, which can be an 'Edit' or 'Done' button. */
   const renderActionButton = () => {
     if (isEditMode || isSearchActive) {
       return (
         <button
-          onClick={() => {
-            setIsEditMode(false);
-            setSearchQuery('');
-          }}
-          className="self-stretch inline-flex items-center px-4 rounded-lg shadow-sm bg-[#5d93e3] text-white transition-colors"
+          onClick={handleEditClick}
+          className="inline-flex self-stretch items-center rounded-lg bg-[#5d93e3] px-4 text-white shadow-sm transition-colors"
           aria-label="Done editing"
         >
           <FaCheckCircle className='scale-125' />
@@ -1064,11 +1180,11 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
     }
     return (
       <button
-        onClick={() => setIsEditMode(true)}
-        className="self-stretch inline-flex items-center px-4 rounded-lg shadow-sm bg-white text-[#5c5e62] hover:bg-gray-100 transition-colors"
+        onClick={handleEditClick}
+        className="inline-flex self-stretch items-center rounded-lg bg-white px-4 text-[#5c5e62] shadow-sm transition-colors hover:bg-gray-100"
         aria-label="Edit watchlist"
       >
-        <GiSettingsKnobs className='scale-125' />
+        <IoIosSettings className='scale-150' />
       </button>
     );
   };
@@ -1079,13 +1195,13 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
         <h1 className="text-3xl font-bold pt-5 pl-5">
           Watchlist
         </h1>
-        {/* Watchlist tabs */}
-        <div className="px-5 py-3 whitespace-nowrap border-b border-gray-200 overflow-x-scroll no-scrollbar">
+        {/* Horizontal scrollable list of watchlist tabs */}
+        <div className="px-5 py-3 whitespace-nowrap overflow-x-scroll no-scrollbar">
           {watchListNames.map((watchListName) => (
             <button
               key={watchListName}
               className={`inline-block px-4 py-2 text-sm font-bold mr-2 relative ${selectedWatchlist === watchListName ? 'text-[#5d93e3]' : ''}`}
-              onClick={() => setSelectedWatchlist(watchListName)}
+              onClick={() => handleWatchlistChange(watchListName)}
             >
               {watchListName}
               {selectedWatchlist === watchListName && (
@@ -1096,7 +1212,6 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
         </div>
       </div>
 
-      {/* Search Bar and Smart Button Container */}
       <div className="flex items-center gap-3 px-5 py-3 z-10">
         <div className="relative flex-grow flex items-center w-full rounded-lg shadow-sm bg-white">
           <span className="absolute left-3"><FaSearch size={20} color="#5c5e62" /></span>
@@ -1111,9 +1226,8 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
         {renderActionButton()}
       </div>
 
-      {/* Stock List */}
       <div className="flex-grow rounded-t-[2rem] bg-white shadow-inner -mt-10 z-0">
-        <div className="border-b border-gray-200 mx-5 mt-10" />
+        <div className="border-b border-gray-300 mx-5 mt-10" />
         <div className="px-5 text-[#5c5e62]">
           {stocksToDisplay.length > 0 ? (
             stocksToDisplay.map((stock) => {
@@ -1131,14 +1245,15 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
               );
             })
           ) : (
+            // Display an empty state message if no stocks are available.
             <div className="text-center mt-10 pb-10">
               {isSearchActive ?
-                < EmptyState
+                <EmptyState
                   icon={<MdSearchOff size={80} />}
                   title="No stocks found"
                   subtitle="Try searching something different"
                 /> :
-                < EmptyState
+                <EmptyState
                   icon={<TbBriefcaseOff size={80} />}
                   title="This watchlist is empty"
                   subtitle="Try adding new stocks to the watchlist"
@@ -1146,6 +1261,7 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
               }
             </div>
           )}
+          <div className="mx-5 mt-10" />
         </div>
       </div>
     </div>
@@ -1153,16 +1269,27 @@ const WatchlistPage: React.FC<WatchlistPageProps> = ({ onStockSelect, allStocks,
 };
 
 
+/**
+ * The Portfolio page component, which shows user's holdings and positions.
+ */
 const PortfolioPage: React.FC<PortfolioPageProps> = ({ onStockSelect, holdings, positions }) => {
+  // State for the active tab ('holdings' or 'positions').
   const [activeTab, setActiveTab] = useState<'holdings' | 'positions'>('holdings');
 
-  // Totals for holdings
+  /** Handles changing the active portfolio tab. */
+  const handleTabChange = (tab: 'holdings' | 'positions') => {
+    // Haptic: Light feedback for switching tabs.
+    triggerHapticFeedback('light');
+    setActiveTab(tab);
+  };
+
+  // Calculate total values for holdings.
   const totalInvestedHoldings = holdings.reduce((sum, s) => sum + s.quantity * s.avgBuyPrice, 0);
   const totalCurrentHoldings = holdings.reduce((sum, s) => sum + s.quantity * s.currentMarketPrice, 0);
   const holdingsPL = totalCurrentHoldings - totalInvestedHoldings;
   const holdingsPLPercentage = totalInvestedHoldings > 0 ? (holdingsPL / totalInvestedHoldings) * 100 : 0;
 
-  // Totals for positions
+  // Calculate total values for positions.
   const totalInvestedPositions = positions.reduce((sum, s) => sum + s.quantity * s.entryPrice, 0);
   const totalCurrentPositions = positions.reduce((sum, s) => sum + s.quantity * s.currentMarketPrice, 0);
   const positionsPL = totalCurrentPositions - totalInvestedPositions;
@@ -1174,16 +1301,11 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({ onStockSelect, holdings, 
           Portfolio
         </h1>
 
-        {/* Tab Navigation (Holdings/Positions) */}
-        <div className="px-5 pt-1 border-b border-gray-200 bg-transparent">
+        <div className="px-5 pt-1 bg-transparent">
           <div className="flex bg-transparent p-1">
             <button
-              className={`flex-1 py-2 text-sm font-bold relative
-                ${activeTab === 'holdings'
-                  ? 'text-[#5d93e3]' // Active tab text color
-                  : 'text-[#5c5e62]' // Inactive tab text color
-                }`}
-              onClick={() => setActiveTab('holdings')}
+              className={`flex-1 py-2 text-sm font-bold relative ${activeTab === 'holdings' ? 'text-[#5d93e3]' : 'text-[#5c5e62]'}`}
+              onClick={() => handleTabChange('holdings')}
             >
               Holdings
               <span className="ml-1 pt-0.5 text-white text-xs inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600">
@@ -1194,12 +1316,8 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({ onStockSelect, holdings, 
               )}
             </button>
             <button
-              className={`flex-1 py-2 text-sm font-bold relative
-                ${activeTab === 'positions'
-                  ? 'text-[#5d93e3]' // Active tab text color
-                  : 'text-[#5c5e62]' // Inactive tab text color
-                }`}
-              onClick={() => setActiveTab('positions')}
+              className={`flex-1 py-2 text-sm font-bold relative ${activeTab === 'positions' ? 'text-[#5d93e3]' : 'text-[#5c5e62]'}`}
+              onClick={() => handleTabChange('positions')}
             >
               Positions
               <span className="ml-1 pt-0.5 text-white text-xs inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600">
@@ -1213,43 +1331,27 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({ onStockSelect, holdings, 
         </div>
       </div>
       <div className='flex flex-col bg-[#ebecee] text-[#5c5e62]'>
-        {/* Main Content Area */}
         {activeTab === 'holdings' && (
           <>
             <SummaryCard investedAmount={totalInvestedHoldings} currentAmount={totalCurrentHoldings} profit={holdingsPL} profitPercentage={holdingsPLPercentage} showPercentagePL={true} />
-            <div className="border-b border-gray-200 mx-5 my-3 z-10" />
+            <div className="border-b border-gray-300 mx-5 my-3 z-10" />
             <div className="px-5 py-24 flex-grow rounded-t-[2rem] bg-white shadow-inner -mt-28 z-0">
-              {holdings.length ? (
-                <>
-                  {holdings.map((stock) => <HoldingStockItem key={stock.id} stock={stock} onStockClick={onStockSelect} />)}
-                </>) : (
-                <>
-                  <EmptyState
-                    icon={<TbBriefcaseOff size={80} />}
-                    title="No holdings"
-                    subtitle="Place an order from your watchlist"
-                  />
-                </>
-              )}
+              {holdings.length ? holdings.map((stock) => <HoldingStockItem key={stock.id} stock={stock} onStockClick={onStockSelect} />)
+                : <EmptyState icon={<TbBriefcaseOff size={80} />} title="No holdings" subtitle="Place an order from your watchlist" />
+              }
+              <div className="mt-2" />
             </div>
           </>
         )}
         {activeTab === 'positions' && (
           <>
             <SummaryCard investedAmount={totalInvestedPositions} currentAmount={totalCurrentPositions} profit={positionsPL} showPercentagePL={false} />
-            <div className="border-b border-gray-200 mx-5 my-3 z-10" />
+            <div className="border-b border-gray-300 mx-5 my-3 z-10" />
             <div className="px-5 py-24 flex-grow rounded-t-[2rem] bg-white shadow-inner -mt-28 z-0">
-              {positions.length > 0 ? (
-                <>
-                  {positions.map((stock) => <PositionStockItem key={stock.id} stock={stock} onStockClick={onStockSelect} />)}
-                </>) : (
-                <>
-                  <EmptyState
-                    icon={<TbBriefcaseOff size={80} />}
-                    title="No positions"
-                    subtitle="Place an order from your watchlist"
-                  />
-                </>)}
+              {positions.length > 0 ? positions.map((stock) => <PositionStockItem key={stock.id} stock={stock} onStockClick={onStockSelect} />)
+                : <EmptyState icon={<TbBriefcaseOff size={80} />} title="No positions" subtitle="Place an order from your watchlist" />
+              }
+              <div className="mt-2" />
             </div>
           </>
         )}
@@ -1258,28 +1360,34 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({ onStockSelect, holdings, 
   );
 };
 
+/**
+ * The News page component, displaying articles filtered by category.
+ */
 const NewsPage: React.FC = () => {
+  // State for the selected news category.
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // Filter news articles based on the selected category.
   const filteredNews = selectedCategory === 'All' ? DUMMY_NEWS_ARTICLES : DUMMY_NEWS_ARTICLES.filter(a => a.category === selectedCategory);
+
+  /** Handles changing the active news category. */
+  const handleCategoryChange = (category: string) => {
+    // Haptic: Light feedback for switching tabs.
+    triggerHapticFeedback('light');
+    setSelectedCategory(category);
+  };
 
   return (
     <div className="flex flex-col bg-[#ebecee] text-[#5c5e62]">
       <div className="sticky top-0 z-20 bg-[#ebecee]">
-        {/* Title */}
         <h1 className="text-3xl font-bold pt-5 pl-5">
           News
         </h1>
-        {/* Category Tabs */}
-        <div className="px-5 py-3 whitespace-nowrap border-b border-gray-200 overflow-x-scroll no-scrollbar">
+        <div className="px-5 py-3 whitespace-nowrap overflow-x-scroll no-scrollbar">
           {DUMMY_NEWS_CATEGORIES.map((category) => (
             <button
               key={category}
-              className={`inline-block px-4 py-2 text-sm font-bold mr-2 relative
-                ${selectedCategory === category
-                  ? 'text-[#5d93e3]'
-                  : 'text-[#5c5e62]'
-                }`}
-              onClick={() => setSelectedCategory(category)}
+              className={`inline-block px-4 py-2 text-sm font-bold mr-2 relative ${selectedCategory === category ? 'text-[#5d93e3]' : 'text-[#5c5e62]'}`}
+              onClick={() => handleCategoryChange(category)}
             >
               {category}
               {selectedCategory === category && (
@@ -1294,7 +1402,7 @@ const NewsPage: React.FC = () => {
           {filteredNews.length > 0 ? (
             filteredNews.map((article) => <NewsItem key={article.id} article={article} />)
           ) : (
-            < EmptyState
+            <EmptyState
               icon={<TbNewsOff size={80} />}
               title="No News Available"
               subtitle="There are no articles in this category right now"
@@ -1310,40 +1418,49 @@ const NewsPage: React.FC = () => {
 // 5. MAIN PARENT COMPONENT
 //================================================================
 
+/**
+ * The main component of the application that manages all state and renders different pages.
+ */
 export default function Home() {
+  // State for the current active view (page).
   const [currentView, setCurrentView] = useState<CurrentView>('watchlist');
+  // State for the currently selected stock to show in the detail sheet.
   const [selectedStock, setSelectedStock] = useState<SelectableStock | null>(null);
+  // State to control the visibility of the stock detail sheet.
   const [isSheetOpen, setSheetOpen] = useState(false);
 
-  // State for dynamic data
+  // --- Data State ---
+  // State for the master list of all stocks.
   const [stocks, setStocks] = useState<Stock[]>(DUMMY_STOCKS);
+  // State for the user's watchlists.
   const [watchList, setwatchList] = useState<WState>({
-    'My Stocks': ['1', '6', '8'],
-    'Tech Giants': ['1', '2', '3', '4', '5'],
-    'Green Energy': ['10'],
-    'Value Picks': ['6'],
-    'Growth Stocks': ['5'],
-    'ETFs': [],
+    'My Stocks': ['1', '6', '8'], 'Tech Giants': ['1', '2', '3', '4', '5'], 'Green Energy': ['10'], 'Value Picks': ['6'], 'Growth Stocks': ['5'], 'ETFs': [],
   });
+  // State for the user's portfolio holdings.
   const [holdings, setHoldings] = useState<HoldingStock[]>(DUMMY_HOLDINGS);
+  // State for the user's intraday positions.
   const [positions, setPositions] = useState<PositionStock[]>(DUMMY_POSITIONS);
+  // State for all created price alerts.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
 
+  // --- UI State ---
+  // State for the custom notification pop-up.
   const [notification, setNotification] = useState({ visible: false, message: '', description: '', type: '' });
+  // Ref to manage the timeout for hiding notifications.
   const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Handlers & Helpers ---
-  const triggerHapticFeedback = () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(200);
-    }
-  };
-
+  /**
+   * Displays a notification pop-up.
+   * @param message The main title of the notification.
+   * @param description The body text of the notification.
+   * @param type The type of notification ('success' or 'alert').
+   */
   const showNotification = (message: string, description: string, type: 'success' | 'alert' = 'success') => {
+    // Haptic: Trigger success or error feedback along with the notification.
+    triggerHapticFeedback(type === 'alert' ? 'error' : 'success');
     if (notificationTimeoutRef.current) {
       clearTimeout(notificationTimeoutRef.current);
     }
-    // Set the type along with other properties
     setNotification({ visible: true, message, description, type });
 
     notificationTimeoutRef.current = setTimeout(() => {
@@ -1351,10 +1468,12 @@ export default function Home() {
     }, 3000);
   };
 
+  /** Adds a stock to a specific watchlist. */
   const handleAddStockToWatchlist = (stockId: string, watchListName: string) => {
+    const stockToFind = DUMMY_STOCKS.find(stock => stock.id === stockId);
+    const stockName = stockToFind?.name;
     setwatchList(prev => {
       const currentList = prev[watchListName] || [];
-      // Add only if it's not already in the list
       if (!currentList.includes(stockId)) {
         return {
           ...prev,
@@ -1363,23 +1482,25 @@ export default function Home() {
       }
       return prev;
     });
-    showNotification('Stock Added', `Added to ${watchListName}`);
+    showNotification('Stock Added', `Added ${stockName} to ${watchListName}`);
   };
 
+  /** Removes a stock from a specific watchlist. */
   const handleRemoveStockFromWatchlist = (stockId: string, watchListName: string) => {
+    const stockToFind = DUMMY_STOCKS.find(stock => stock.id === stockId);
+    const stockName = stockToFind?.name;
     setwatchList(prev => ({
       ...prev,
       [watchListName]: (prev[watchListName] || []).filter((id: string) => id !== stockId),
     }));
-    showNotification('Stock Removed', `Removed from ${watchListName}`);
+    showNotification('Stock Removed', `Removed ${stockName} from ${watchListName}`);
   };
 
-  // Effect 1: Simulate price fluctuations on a timer
+  // Effect to simulate real-time price fluctuations every 3 seconds.
   useEffect(() => {
     const interval = setInterval(() => {
       const updatePrice = (price: number) => Math.max(0, price + (Math.random() - 0.5) * 0.5);
 
-      // Use functional updates to prevent issues with stale state
       setStocks(prevStocks => prevStocks.map(s => ({ ...s, currentPrice: updatePrice(s.currentPrice) })));
       setHoldings(prevHoldings => prevHoldings.map(h => ({ ...h, currentMarketPrice: updatePrice(h.currentMarketPrice) })));
       setPositions(prevPositions => prevPositions.map(p => ({ ...p, currentMarketPrice: updatePrice(p.currentMarketPrice) })));
@@ -1388,7 +1509,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Effect 2: Check for triggered alerts whenever prices or alerts change
+  // Effect to check for triggered price alerts whenever prices or alerts change.
   useEffect(() => {
     const priceMap = new Map<string, number>();
     stocks.forEach(s => priceMap.set(s.id, s.currentPrice));
@@ -1400,13 +1521,11 @@ export default function Home() {
     alerts.forEach(alert => {
       if (!alert.triggered && priceMap.has(alert.stockId)) {
         const currentPrice = priceMap.get(alert.stockId)!;
-
         const hasTriggered =
           (alert.direction === 'up' && currentPrice >= alert.targetPrice) ||
           (alert.direction === 'down' && currentPrice <= alert.targetPrice);
 
         if (hasTriggered) {
-          triggerHapticFeedback();
           const movement = alert.direction === 'up' ? 'crossed above' : 'dropped below';
           showNotification(
             `Price Alert!`,
@@ -1418,6 +1537,7 @@ export default function Home() {
       }
     });
 
+    // Mark triggered alerts to prevent re-triggering.
     if (triggeredAlertIds.size > 0) {
       setAlerts(prevAlerts =>
         prevAlerts.map(a =>
@@ -1427,42 +1547,37 @@ export default function Home() {
     }
   }, [stocks, holdings, positions, alerts]);
 
+  /** Handles selecting a stock from any list to open the detail sheet. */
   const handleStockSelect = (clickedStock: SelectableStock) => {
+    // Haptic: Medium feedback for a primary action like opening a detail sheet.
+    triggerHapticFeedback('medium');
     let stockForSheet: SelectableStock = clickedStock;
+    // Check if the selected stock is already in holdings or positions to show owned quantity.
     if (!('quantity' in clickedStock)) {
       const holdingInfo = holdings.find(h => h.name === clickedStock.name);
       const positionInfo = positions.find(p => p.name === clickedStock.name);
       if (holdingInfo) {
-        stockForSheet = {
-          ...clickedStock,
-          id: holdingInfo.id,
-          quantity: holdingInfo.quantity,
-        };
+        stockForSheet = { ...clickedStock, id: holdingInfo.id, quantity: holdingInfo.quantity };
       } else if (positionInfo) {
-        stockForSheet = {
-          ...clickedStock,
-          id: positionInfo.id,
-          quantity: positionInfo.quantity,
-          type: positionInfo.type,
-        };
+        stockForSheet = { ...clickedStock, id: positionInfo.id, quantity: positionInfo.quantity, type: positionInfo.type };
       }
     }
     setSelectedStock(stockForSheet);
     setSheetOpen(true);
   };
 
-
-
+  /** Handles the opening and closing of the detail sheet. */
   const handleSheetOpenChange = (open: boolean) => {
     setSheetOpen(open);
     if (!open) {
+      // Delay clearing the selected stock to allow for the closing animation.
       setTimeout(() => setSelectedStock(null), 300);
     }
   };
 
+  /** Creates a new price alert. */
   const handleSetAlert = (stock: SelectableStock, targetPrice: number) => {
     const currentPrice = 'currentMarketPrice' in stock ? stock.currentMarketPrice : stock.currentPrice;
-
     const newAlert: PriceAlert = {
       id: Date.now(),
       stockId: stock.id,
@@ -1473,24 +1588,23 @@ export default function Home() {
     };
     setAlerts(prevAlerts => [...prevAlerts, newAlert]);
     const directionText = newAlert.direction === 'up' ? 'goes above' : 'drops below';
-
     showNotification('Alert Set!', `We'll notify you if ${stock.name} ${directionText} $${targetPrice.toFixed(2)}`, 'success');
   };
 
+  /** Handles the logic for buying a stock. */
   const handleBuy = (stockToBuy: SelectableStock, quantity: number, transactionType: 'holding' | 'position') => {
     const currentPrice = 'currentMarketPrice' in stockToBuy ? stockToBuy.currentMarketPrice : stockToBuy.currentPrice;
 
     if (transactionType === 'holding') {
       setHoldings(prevHoldings => {
         const existingHoldingIndex = prevHoldings.findIndex(h => h.name === stockToBuy.name);
-
         if (existingHoldingIndex > -1) {
+          // If holding exists, update quantity and average price.
           const updatedHoldings = [...prevHoldings];
           const existingHolding = updatedHoldings[existingHoldingIndex];
           const totalExistingValue = existingHolding.avgBuyPrice * existingHolding.quantity;
           const newPurchaseValue = currentPrice * quantity;
           const newTotalQuantity = existingHolding.quantity + quantity;
-
           updatedHoldings[existingHoldingIndex] = {
             ...existingHolding,
             quantity: newTotalQuantity,
@@ -1498,13 +1612,10 @@ export default function Home() {
           };
           return updatedHoldings;
         } else {
+          // If not, create a new holding.
           const newHolding: HoldingStock = {
-            id: `h-${Date.now()}`,
-            name: stockToBuy.name,
-            exchange: stockToBuy.exchange,
-            quantity: quantity,
-            avgBuyPrice: currentPrice,
-            currentMarketPrice: currentPrice,
+            id: `h-${Date.now()}`, name: stockToBuy.name, exchange: stockToBuy.exchange,
+            quantity: quantity, avgBuyPrice: currentPrice, currentMarketPrice: currentPrice,
           };
           return [...prevHoldings, newHolding];
         }
@@ -1512,14 +1623,13 @@ export default function Home() {
     } else { // transactionType === 'position'
       setPositions(prevPositions => {
         const existingPositionIndex = prevPositions.findIndex(p => p.name === stockToBuy.name && p.type === 'BUY');
-
         if (existingPositionIndex > -1) {
+          // If position exists, update quantity and average entry price.
           const updatedPositions = [...prevPositions];
           const existingPosition = updatedPositions[existingPositionIndex];
           const totalExistingValue = existingPosition.entryPrice * existingPosition.quantity;
           const newPurchaseValue = currentPrice * quantity;
           const newTotalQuantity = existingPosition.quantity + quantity;
-
           updatedPositions[existingPositionIndex] = {
             ...existingPosition,
             quantity: newTotalQuantity,
@@ -1528,68 +1638,57 @@ export default function Home() {
           };
           return updatedPositions;
         } else {
+          // If not, create a new position.
           const newPosition: PositionStock = {
-            id: `p-${Date.now()}`,
-            name: stockToBuy.name,
-            exchange: stockToBuy.exchange,
-            quantity: quantity,
-            entryPrice: currentPrice,
-            currentMarketPrice: currentPrice,
-            type: 'BUY',
+            id: `p-${Date.now()}`, name: stockToBuy.name, exchange: stockToBuy.exchange,
+            quantity: quantity, entryPrice: currentPrice, currentMarketPrice: currentPrice, type: 'BUY',
           };
           return [...prevPositions, newPosition];
         }
       });
     }
     setSheetOpen(false);
-    showNotification(
-      'Transaction Complete',
-      `${quantity} ${stockToBuy.name} shares added to your ${transactionType}s`
-    );
+    showNotification('Transaction Complete', `${quantity} ${stockToBuy.name} shares added to your ${transactionType}s`);
   };
 
-  const handleSell = (stockToBuy: SelectableStock, quantity: number, transactionType: 'holding' | 'position') => {
-    if (transactionType === 'holding') {
+  /** Handles the logic for selling a stock. */
+  const handleSell = (stockToSell: SelectableStock, quantity: number, assetType: 'holding' | 'position') => {
+    if (assetType === 'holding') {
       setHoldings(prevHoldings => {
-        const holdingIndex = prevHoldings.findIndex(h => h.id === stockToBuy.id);
-        if (holdingIndex === -1) return prevHoldings;
+        const holdingIndex = prevHoldings.findIndex(h => h.id === stockToSell.id);
+        if (holdingIndex === -1 || prevHoldings[holdingIndex].quantity < quantity) return prevHoldings;
 
-        const holding = prevHoldings[holdingIndex];
-        if (holding.quantity < quantity) return prevHoldings; // Failsafe validation
-
-        if (holding.quantity === quantity) {
-          return prevHoldings.filter(h => h.id !== stockToBuy.id);
+        if (prevHoldings[holdingIndex].quantity === quantity) {
+          // If selling all shares, remove the holding.
+          return prevHoldings.filter(h => h.id !== stockToSell.id);
         } else {
+          // Otherwise, just decrease the quantity.
           const updatedHoldings = [...prevHoldings];
-          updatedHoldings[holdingIndex] = { ...holding, quantity: holding.quantity - quantity };
+          updatedHoldings[holdingIndex] = { ...updatedHoldings[holdingIndex], quantity: updatedHoldings[holdingIndex].quantity - quantity };
           return updatedHoldings;
         }
       });
-    } else { // transactionType === 'position'
+    } else { // assetType === 'position'
       setPositions(prevPositions => {
-        const positionIndex = prevPositions.findIndex(p => p.id === stockToBuy.id);
-        if (positionIndex === -1) return prevPositions;
+        const positionIndex = prevPositions.findIndex(p => p.id === stockToSell.id);
+        if (positionIndex === -1 || prevPositions[positionIndex].quantity < quantity) return prevPositions;
 
-        const position = prevPositions[positionIndex];
-        if (position.quantity < quantity) return prevPositions; // Failsafe validation
-
-        if (position.quantity === quantity) {
-          return prevPositions.filter(p => p.id !== stockToBuy.id);
+        if (prevPositions[positionIndex].quantity === quantity) {
+          // If closing the whole position, remove it.
+          return prevPositions.filter(p => p.id !== stockToSell.id);
         } else {
+          // Otherwise, decrease the quantity.
           const updatedPositions = [...prevPositions];
-          updatedPositions[positionIndex] = { ...position, quantity: position.quantity - quantity };
+          updatedPositions[positionIndex] = { ...updatedPositions[positionIndex], quantity: updatedPositions[positionIndex].quantity - quantity };
           return updatedPositions;
         }
       });
     }
     setSheetOpen(false);
-    showNotification(
-      'Transaction Complete',
-      `You sold ${quantity} shares of ${stockToBuy.name}`
-    );
+    showNotification('Transaction Complete', `You sold ${quantity} shares of ${stockToSell.name}`);
   };
 
-
+  /** Renders the current page based on the 'currentView' state. */
   const renderCurrentView = () => {
     switch (currentView) {
       case 'watchlist':
@@ -1616,7 +1715,7 @@ export default function Home() {
   };
 
   return (
-    <div className="pb-[70px] min-h-screen flex flex-col font-sans bg-white">
+    <div className={`pb-[70px] min-h-screen flex flex-col bg-white font-inter`} >
       <main className="flex-grow">
         {renderCurrentView()}
       </main>
