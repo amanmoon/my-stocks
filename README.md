@@ -9,7 +9,9 @@ _A screenshot of the application's main interface._
 
 ## About The Project
 
+
 This project is a frontend clone of Zerodha Kite, a popular online trading platform. The goal was to replicate the user interface and user experience of the Kite web application using a modern tech stack. This project demonstrates proficiency in building complex and responsive user interfaces with **Next.js** for server-side rendering and **Tailwind CSS** for utility-first styling.
+
 ---
 
 ## Getting Started
