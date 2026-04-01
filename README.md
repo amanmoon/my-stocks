@@ -57,8 +57,4 @@ You can explore the different UI components, such as:
 * The portfolio page
 * Order placement windows (UI only)
 
-Here's another look at the application in action:
-
-![Another screenshot of the app](</path/to/your/screenshot2.png>)
-_Feel free to add more screenshots to showcase different parts of your app._
 
